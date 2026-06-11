@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini CRM Lead Management</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="ambient-grid" aria-hidden="true"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <main class="app-shell">
+      <section class="login-screen" id="loginScreen">
+        <div class="login-panel">
+          <div class="login-copy">
+            <p class="eyebrow">Client Lead Management</p>
+            <h1>leadIT</h1>
+            <p class="muted">A professional client pipeline command center for capturing enquiries, prioritizing follow-ups, and turning new conversations into booked business.</p>
+            <div class="login-proof">
+              <span>Encrypted session</span>
+              <span>Live pipeline</span>
+              <span>Follow-up tracking</span>
+            </div>
+          </div>
+          <form id="loginForm" class="form-stack">
+            <div class="form-title">
+              <strong>Login</strong>
+              <span>Sign in with your credentials.</span>
+            </div>
+            <label>
+              Username
+              <input name="username" autocomplete="username" placeholder="Enter username" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autocomplete="current-password" placeholder="Enter password" required />
+            </label>
+            <button type="submit">Sign in</button>
+            <button type="button" id="createAccountButton">Create account</button>
+            <p class="form-message" id="loginMessage"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="dashboard hidden" id="dashboard">
+        <aside class="sidebar">
+          <div class="brand-block">
+            <div class="brand-mark">LF</div>
+            <div>
+              <p class="eyebrow">leadIT</p>
+              <h1>Client CRM</h1>
+            </div>
+          </div>
+          <div class="operator-card">
+            <span class="pulse-dot"></span>
+            <div>
+              <strong id="profileName">User online</strong>
+              <p>Account active</p>
+            </div>
+          </div>
+          <nav class="sidebar-actions" aria-label="Account actions">
+            <button type="button" id="dashboardButton">Dashboard</button>
+            <button type="button" id="addLeadButton">Add Lead</button>
+            <button type="button" id="recentActivityButton">Recent Activity</button>
+            <button type="button" id="profileButton">Profile</button>
+            <button type="button" id="settingsButton">Settings</button>
+          </nav>
+          <button class="ghost" id="logoutButton" type="button">Logout</button>
+        </aside>
+
+        <section class="workspace">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Pipeline Overview</p>
+              <h2>Lead Management System</h2>
+            </div>
+            <form class="search-row" id="filterForm">
+              <label class="search-field" aria-label="Search leads">
+                <span aria-hidden="true">&#128269;</span>
+                <input id="searchInput" type="search" placeholder="Search name, email, company, source" />
+              </label>
+              <select id="sourceFilter" aria-label="Filter by source">
+                <option value="">All sources</option>
+              </select>
+              <select id="priorityFilter" aria-label="Filter by priority">
+                <option value="all">All priorities</option>
+                <option value="high">High priority</option>
+                <option value="medium">Medium priority</option>
+                <option value="low">Low priority</option>
+              </select>
+            </form>
+          </header>
+
+          <section class="metrics" id="metrics"></section>
+
+          <section class="insight-grid">
+            <article class="pipeline-panel lead-insight-panel">
+              <div class="section-heading">
+                <h3 id="insightTitle">Lead Results</h3>
+                <span id="pipelineSignal">Awaiting data</span>
+              </div>
+              <div class="lead-insights" id="pipelineTrack"></div>
+            </article>
+            <article class="activity-panel hidden" id="activityPanel">
+              <div class="section-heading">
+                <h3>Recent Activity</h3>
+                <span>Latest 6</span>
+              </div>
+              <div class="activity-feed" id="activityFeed"></div>
+            </article>
+          </section>
+
+          <section class="content-grid" id="contentGrid">
+            <div class="lead-list-wrap">
+              <div class="section-heading">
+                <h3>Leads</h3>
+                <span id="leadCount">0 records</span>
+              </div>
+              <div class="lead-list" id="leadList"></div>
+            </div>
+
+            <aside class="lead-detail" id="leadDetail">
+              <div class="empty-state">
+                <h3>Select a lead</h3>
+                <p class="muted">Open a lead to update status, review the original message, and add follow-up notes.</p>
+              </div>
+            </aside>
+          </section>
+
+          <section class="intake-band">
+            <div>
+              <p class="eyebrow">Website Form Simulator</p>
+              <h3 id="addLeadHeading">Capture a new lead</h3>
+            </div>
+            <form id="intakeForm" class="intake-form">
+              <input name="name" placeholder="Name" required />
+              <input name="email" type="email" placeholder="Email" required />
+              <input name="phone" placeholder="Phone" />
+              <input name="company" placeholder="Company" />
+              <select name="source">
+                <option>Website Contact Form</option>
+                <option>Referral</option>
+                <option>Instagram Campaign</option>
+                <option>LinkedIn</option>
+              </select>
+              <select name="priority">
+                <option value="medium">Medium priority</option>
+                <option value="high">High priority</option>
+                <option value="low">Low priority</option>
+              </select>
+              <input name="nextFollowUp" type="date" aria-label="Next follow-up date" />
+              <textarea name="message" placeholder="What does the client need?" required></textarea>
+              <button type="submit">Add lead</button>
+            </form>
+            <p class="form-message" id="intakeMessage"></p>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <section class="chatbot" id="chatbot">
+      <button class="chatbot-toggle" id="chatbotToggle" type="button">Ask leadIT</button>
+      <div class="chatbot-panel hidden" id="chatbotPanel">
+        <div class="chatbot-header">
+          <div>
+            <strong>leadIT Assistant</strong>
+            <span>CRM help chat</span>
+          </div>
+          <button type="button" id="chatbotClose">&times;</button>
+        </div>
+        <div class="chatbot-messages" id="chatbotMessages">
+          <div class="chat-message bot">Hi, I can help you understand this CRM, leads, statuses, notes, follow-ups, search, and account login.</div>
+        </div>
+        <form class="chatbot-form" id="chatbotForm">
+          <input id="chatbotInput" placeholder="Ask about this CRM..." autocomplete="off" required />
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="modal-overlay hidden" id="accountModal" aria-hidden="true">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow" id="accountModalEyebrow">Account</p>
+            <h3 id="accountModalTitle">Profile</h3>
+          </div>
+          <button type="button" id="accountModalClose">&times;</button>
+        </div>
+        <div class="modal-content" id="accountModalContent"></div>
+      </div>
+    </section>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

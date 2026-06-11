@@ -1,0 +1,18 @@
+{
+  "name": "mini-crm-lead-management",
+  "version": "1.0.0",
+  "description": "A secure mini CRM for capturing, tracking, and converting client leads.",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node backend/server.js"
+  },
+  "keywords": [
+    "crm",
+    "lead-management",
+    "node",
+    "dashboard"
+  ],
+  "author": "",
+  "license": "MIT"
+}
