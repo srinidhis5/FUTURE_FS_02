@@ -18,7 +18,9 @@ async function getDb() {
   }
 
   if (!clientCache.promise) {
-    clientCache.client = new MongoClient(process.env.MONGODB_URI);
+    clientCache.client = new MongoClient(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 8000
+    });
     clientCache.promise = clientCache.client.connect();
   }
 
