@@ -129,18 +129,7 @@ async function createActivity(db, label, userId = null) {
 async function requireAuth(req, res, next) {
   try {
     const db = await getDb();
-    const cookies = parseCookies(req.headers.cookie);
-    const sessionId = cookies[COOKIE_NAME];
-    if (!sessionId) return res.status(401).json({ error: "Please sign in first." });
-
-    const session = await db.collection("sessions").findOne({
-      _id: sessionId,
-      expiresAt: { $gt: new Date() }
-    });
-
-    if (!session) return res.status(401).json({ error: "Session expired. Please sign in again." });
-
-    const user = await db.collection("users").findOne({ _id: session.userId });
+    const user = await getUserFromSession(req, db);
     if (!user) return res.status(401).json({ error: "User not found." });
 
     req.db = db;
@@ -149,6 +138,20 @@ async function requireAuth(req, res, next) {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+}
+
+async function getUserFromSession(req, db) {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies[COOKIE_NAME];
+  if (!sessionId) return null;
+
+  const session = await db.collection("sessions").findOne({
+    _id: sessionId,
+    expiresAt: { $gt: new Date() }
+  });
+
+  if (!session) return null;
+  return db.collection("users").findOne({ _id: session.userId });
 }
 
 app.get("/api/health", async (_req, res) => {
@@ -233,7 +236,7 @@ app.get("/api/me", requireAuth, (req, res) => {
 });
 
 app.get("/api/leads", requireAuth, async (req, res) => {
-  const filter = {};
+  const filter = { ownerId: req.user._id };
   if (["new", "contacted", "converted"].includes(req.query.status)) filter.status = req.query.status;
   if (["high", "medium", "low"].includes(req.query.priority)) filter.priority = req.query.priority;
   if (req.query.source) filter.source = req.query.source;
@@ -243,21 +246,22 @@ app.get("/api/leads", requireAuth, async (req, res) => {
   }
 
   const leads = await req.db.collection("leads").find(filter).sort({ updatedAt: -1 }).toArray();
-  const sources = await req.db.collection("leads").distinct("source");
+  const sources = await req.db.collection("leads").distinct("source", { ownerId: req.user._id });
   res.json({ leads: leads.map(serializeLead), sources: sources.sort() });
 });
 
 app.post("/api/public/leads", async (req, res) => {
   try {
     const db = await getDb();
+    const user = await getUserFromSession(req, db);
     const validated = validateLead(req.body);
     if (validated.error) return res.status(400).json({ error: validated.error });
 
     const now = new Date().toISOString();
-    const lead = { ...validated.lead, notes: [], createdAt: now, updatedAt: now };
+    const lead = { ...validated.lead, ownerId: user?._id || null, notes: [], createdAt: now, updatedAt: now };
     const result = await db.collection("leads").insertOne(lead);
     const created = { ...lead, _id: result.insertedId };
-    await createActivity(db, `New lead captured: ${lead.name}`);
+    await createActivity(db, `New lead captured: ${lead.name}`, user?._id || null);
     res.status(201).json({ lead: serializeLead(created) });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -277,7 +281,7 @@ app.patch("/api/leads/:id", requireAuth, async (req, res) => {
   if (allowed.email) allowed.email = allowed.email.toLowerCase();
   allowed.updatedAt = new Date().toISOString();
 
-  const result = await req.db.collection("leads").findOneAndUpdate({ _id }, { $set: allowed }, { returnDocument: "after" });
+  const result = await req.db.collection("leads").findOneAndUpdate({ _id, ownerId: req.user._id }, { $set: allowed }, { returnDocument: "after" });
   if (!result) return res.status(404).json({ error: "Lead not found." });
   await createActivity(req.db, `Lead updated: ${result.name}`, req.user._id);
   res.json({ lead: serializeLead(result) });
@@ -291,7 +295,7 @@ app.post("/api/leads/:id/notes", requireAuth, async (req, res) => {
 
   const note = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
   const result = await req.db.collection("leads").findOneAndUpdate(
-    { _id },
+    { _id, ownerId: req.user._id },
     { $push: { notes: note }, $set: { updatedAt: note.createdAt } },
     { returnDocument: "after" }
   );
@@ -303,15 +307,15 @@ app.post("/api/leads/:id/notes", requireAuth, async (req, res) => {
 app.delete("/api/leads/:id", requireAuth, async (req, res) => {
   const _id = toObjectId(req.params.id);
   if (!_id) return res.status(400).json({ error: "Invalid lead id." });
-  const lead = await req.db.collection("leads").findOne({ _id });
-  const result = await req.db.collection("leads").deleteOne({ _id });
+  const lead = await req.db.collection("leads").findOne({ _id, ownerId: req.user._id });
+  const result = await req.db.collection("leads").deleteOne({ _id, ownerId: req.user._id });
   if (!result.deletedCount) return res.status(404).json({ error: "Lead not found." });
   await createActivity(req.db, `Lead deleted: ${lead?.name || "Unknown lead"}`, req.user._id);
   res.json({ ok: true });
 });
 
 app.get("/api/analytics", requireAuth, async (req, res) => {
-  const leads = await req.db.collection("leads").find({}).toArray();
+  const leads = await req.db.collection("leads").find({ ownerId: req.user._id }).toArray();
   const today = new Date();
   today.setHours(23, 59, 59, 999);
   const stats = {
@@ -322,7 +326,7 @@ app.get("/api/analytics", requireAuth, async (req, res) => {
     followUpsDue: leads.filter((lead) => lead.nextFollowUp && lead.status !== "converted" && new Date(lead.nextFollowUp) <= today).length,
     highPriority: leads.filter((lead) => lead.priority === "high").length
   };
-  const recentActivity = await req.db.collection("activity").find({}).sort({ createdAt: -1 }).limit(6).toArray();
+  const recentActivity = await req.db.collection("activity").find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(6).toArray();
   res.json({ stats, recentActivity });
 });
 
