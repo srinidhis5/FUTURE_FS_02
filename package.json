@@ -1,7 +1,7 @@
 {
-  "name": "mini-crm-lead-management",
+  "name": "leadit-crm",
   "version": "1.0.0",
-  "description": "A secure mini CRM for capturing, tracking, and converting client leads.",
+  "description": "A CRM lead management app with login, lead capture, follow-ups, analytics, and production MongoDB persistence.",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
@@ -9,10 +9,17 @@
   },
   "keywords": [
     "crm",
-    "lead-management",
-    "node",
-    "dashboard"
+    "leads",
+    "express",
+    "mongodb"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongodb": "^6.12.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }

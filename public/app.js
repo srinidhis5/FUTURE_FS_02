@@ -69,6 +69,37 @@ const priorityLabels = {
 
 let toastTimer;
 let filterTimer;
+let loginLiquidFrame;
+
+function initLoginLiquidBackground() {
+  if (!loginScreen) return;
+
+  const setLiquidPosition = (event) => {
+    cancelAnimationFrame(loginLiquidFrame);
+    loginLiquidFrame = requestAnimationFrame(() => {
+      const rect = loginScreen.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const xPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      const yPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
+      const driftX = (xPercent - 50) * -0.42;
+      const driftY = (yPercent - 50) * -0.28;
+
+      loginScreen.style.setProperty("--cursor-x", `${xPercent}%`);
+      loginScreen.style.setProperty("--cursor-y", `${yPercent}%`);
+      loginScreen.style.setProperty("--liquid-x", `${driftX}px`);
+      loginScreen.style.setProperty("--liquid-y", `${driftY}px`);
+    });
+  };
+
+  loginScreen.addEventListener("pointermove", setLiquidPosition);
+  loginScreen.addEventListener("pointerleave", () => {
+    loginScreen.style.setProperty("--cursor-x", "50%");
+    loginScreen.style.setProperty("--cursor-y", "50%");
+    loginScreen.style.setProperty("--liquid-x", "0px");
+    loginScreen.style.setProperty("--liquid-y", "0px");
+  });
+}
 
 function formatDate(value) {
   if (!value) return "Not scheduled";
@@ -777,4 +808,5 @@ function answerCrmQuestion(question) {
   return "I can help with this CRM's leads, statuses, notes, follow-ups, search, filters, login, and dashboard. Ask me about any feature you see here.";
 }
 
+initLoginLiquidBackground();
 checkSession();
