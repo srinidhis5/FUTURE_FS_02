@@ -698,6 +698,12 @@ label {
   background: rgba(255, 209, 102, 0.08);
 }
 
+.reminder-item.due-tomorrow {
+  border-color: rgba(255, 45, 117, 0.64);
+  background: rgba(255, 45, 117, 0.16);
+  box-shadow: 0 0 22px rgba(255, 45, 117, 0.22);
+}
+
 .reminder-item strong,
 .reminder-item span {
   overflow-wrap: anywhere;

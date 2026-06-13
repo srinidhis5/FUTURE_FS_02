@@ -352,6 +352,20 @@ function dueTomorrowLeads() {
   });
 }
 
+function isDueTomorrow(lead) {
+  return dueTomorrowLeads().some((item) => item.id === lead.id);
+}
+
+function reminderLeads() {
+  return state.leads
+    .filter((lead) => lead.nextFollowUp && lead.status !== "converted")
+    .sort((a, b) => {
+      const tomorrowDelta = Number(isDueTomorrow(b)) - Number(isDueTomorrow(a));
+      if (tomorrowDelta) return tomorrowDelta;
+      return new Date(a.nextFollowUp) - new Date(b.nextFollowUp);
+    });
+}
+
 function renderCharts() {
   const statusItems = [
     { label: "New", value: state.stats.new || 0 },
@@ -371,19 +385,20 @@ function renderCharts() {
 }
 
 function renderReminders() {
-  const reminders = dueTomorrowLeads();
+  const reminders = reminderLeads();
+  const dueTomorrowCount = reminders.filter(isDueTomorrow).length;
   if (!reminderList || !reminderSummary) return;
-  reminderSummary.textContent = reminders.length ? `${reminders.length} due tomorrow` : "Clear";
+  reminderSummary.textContent = dueTomorrowCount ? `${dueTomorrowCount} due tomorrow` : "Clear";
 
   if (!reminders.length) {
-    reminderList.innerHTML = `<p class="muted">No follow-ups due tomorrow.</p>`;
+    reminderList.innerHTML = `<p class="muted">No scheduled follow-ups.</p>`;
     return;
   }
 
   reminderList.innerHTML = reminders
     .map(
       (lead) => `
-        <article class="reminder-item">
+        <article class="reminder-item ${isDueTomorrow(lead) ? "due-tomorrow" : ""}">
           <strong>${escapeHtml(lead.name)}</strong>
           <span>${escapeHtml(lead.company || lead.email)} - due ${formatDateOnly(lead.nextFollowUp)}</span>
         </article>
