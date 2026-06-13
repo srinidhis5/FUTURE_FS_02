@@ -49,6 +49,13 @@ const chatbotClose = document.querySelector("#chatbotClose");
 const chatbotMessages = document.querySelector("#chatbotMessages");
 const chatbotForm = document.querySelector("#chatbotForm");
 const chatbotInput = document.querySelector("#chatbotInput");
+const voiceButton = document.querySelector("#voiceButton");
+const statusChart = document.querySelector("#statusChart");
+const priorityChart = document.querySelector("#priorityChart");
+const statusChartSummary = document.querySelector("#statusChartSummary");
+const priorityChartSummary = document.querySelector("#priorityChartSummary");
+const reminderList = document.querySelector("#reminderList");
+const reminderSummary = document.querySelector("#reminderSummary");
 const accountModal = document.querySelector("#accountModal");
 const accountModalEyebrow = document.querySelector("#accountModalEyebrow");
 const accountModalTitle = document.querySelector("#accountModalTitle");
@@ -70,6 +77,9 @@ const priorityLabels = {
 let toastTimer;
 let filterTimer;
 let loginLiquidFrame;
+let recognition;
+let voiceMode = false;
+const chatHistory = [];
 
 function initLoginLiquidBackground() {
   if (!loginScreen) return;
@@ -144,6 +154,7 @@ function showDashboard() {
   loginScreen.classList.add("hidden");
   dashboard.classList.remove("hidden");
   profileName.textContent = state.currentUser ? `${state.currentUser} online` : "User online";
+  requestNotificationPermission();
 }
 
 function showToast(message) {
@@ -183,11 +194,14 @@ async function loadLeads() {
 
 function render() {
   renderMetrics();
+  renderCharts();
+  renderReminders();
   renderSourceFilter();
   renderInsightPanel();
   renderActivity();
   renderLeadList();
   renderLeadDetail();
+  notifyDueLeads();
 }
 
 function renderMetrics() {
@@ -232,6 +246,143 @@ function visibleLeads() {
   }
 
   return state.leads;
+}
+
+function chartColor(index) {
+  return ["#00f5ff", "#ffe600", "#00ff85", "#bc13fe", "#ff2d75"][index % 5];
+}
+
+function drawPieChart(canvas, items) {
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  const { width, height } = canvas;
+  context.clearRect(0, 0, width, height);
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  const centerX = 82;
+  const centerY = height / 2;
+  const radius = 58;
+
+  if (!total) {
+    context.fillStyle = "#8b98aa";
+    context.font = "800 14px Inter, sans-serif";
+    context.fillText("No lead data yet", 34, centerY);
+    return;
+  }
+
+  let start = -Math.PI / 2;
+  items.forEach((item, index) => {
+    const slice = (item.value / total) * Math.PI * 2;
+    context.beginPath();
+    context.moveTo(centerX, centerY);
+    context.arc(centerX, centerY, radius, start, start + slice);
+    context.closePath();
+    context.fillStyle = chartColor(index);
+    context.fill();
+    start += slice;
+  });
+
+  items.forEach((item, index) => {
+    const y = 48 + index * 30;
+    context.fillStyle = chartColor(index);
+    context.fillRect(170, y - 10, 12, 12);
+    context.fillStyle = "#f8fbff";
+    context.font = "800 12px Inter, sans-serif";
+    context.fillText(`${item.label}: ${item.value}`, 190, y);
+  });
+}
+
+function drawBarChart(canvas, items) {
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  const { width, height } = canvas;
+  context.clearRect(0, 0, width, height);
+  const max = Math.max(1, ...items.map((item) => item.value));
+
+  items.forEach((item, index) => {
+    const y = 30 + index * 46;
+    const barWidth = Math.round((item.value / max) * (width - 150));
+    context.fillStyle = "#8b98aa";
+    context.font = "800 12px Inter, sans-serif";
+    context.fillText(item.label, 14, y + 10);
+    context.fillStyle = "rgba(255, 255, 255, 0.08)";
+    context.fillRect(104, y - 8, width - 130, 18);
+    context.fillStyle = chartColor(index);
+    context.fillRect(104, y - 8, barWidth, 18);
+    context.fillStyle = "#f8fbff";
+    context.fillText(String(item.value), 112 + barWidth, y + 7);
+  });
+}
+
+function dueTomorrowLeads() {
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
+  return state.leads.filter((lead) => {
+    if (!lead.nextFollowUp || lead.status === "converted") return false;
+    const due = new Date(lead.nextFollowUp);
+    return due >= start && due <= end;
+  });
+}
+
+function renderCharts() {
+  const statusItems = [
+    { label: "New", value: state.stats.new || 0 },
+    { label: "Contacted", value: state.stats.contacted || 0 },
+    { label: "Converted", value: state.stats.converted || 0 }
+  ];
+  const priorityItems = [
+    { label: "High", value: state.leads.filter((lead) => lead.priority === "high").length },
+    { label: "Medium", value: state.leads.filter((lead) => lead.priority === "medium").length },
+    { label: "Low", value: state.leads.filter((lead) => lead.priority === "low").length }
+  ];
+
+  drawPieChart(statusChart, statusItems);
+  drawBarChart(priorityChart, priorityItems);
+  if (statusChartSummary) statusChartSummary.textContent = `${state.stats.total || 0} total`;
+  if (priorityChartSummary) priorityChartSummary.textContent = `${state.leads.filter((lead) => lead.priority === "high").length} high priority`;
+}
+
+function renderReminders() {
+  const reminders = dueTomorrowLeads();
+  if (!reminderList || !reminderSummary) return;
+  reminderSummary.textContent = reminders.length ? `${reminders.length} due tomorrow` : "Clear";
+
+  if (!reminders.length) {
+    reminderList.innerHTML = `<p class="muted">No follow-ups due tomorrow.</p>`;
+    return;
+  }
+
+  reminderList.innerHTML = reminders
+    .map(
+      (lead) => `
+        <article class="reminder-item">
+          <strong>${escapeHtml(lead.name)}</strong>
+          <span>${escapeHtml(lead.company || lead.email)} - due ${formatDateOnly(lead.nextFollowUp)}</span>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function requestNotificationPermission() {
+  if (!("Notification" in window) || Notification.permission !== "default") return;
+  Notification.requestPermission().catch(() => {});
+}
+
+function notifyDueLeads() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  dueTomorrowLeads().forEach((lead) => {
+    const key = `leadit-reminder-${todayKey}-${lead.id}`;
+    if (localStorage.getItem(key)) return;
+    new Notification("Lead follow-up due tomorrow", {
+      body: `${lead.name} is due on ${formatDateOnly(lead.nextFollowUp)}.`,
+      tag: key
+    });
+    localStorage.setItem(key, "shown");
+  });
 }
 
 function renderInsightPanel() {
@@ -768,14 +919,41 @@ chatbotClose.addEventListener("click", () => {
   chatbotPanel.classList.add("hidden");
 });
 
-chatbotForm.addEventListener("submit", (event) => {
+chatbotForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const question = chatbotInput.value.trim();
   if (!question) return;
+  await sendChatMessage(question, { speak: voiceMode });
+});
+
+if (voiceButton) {
+  voiceButton.addEventListener("click", () => {
+    startVoiceInput();
+  });
+}
+
+async function sendChatMessage(question, options = {}) {
   addChatMessage(question, "user");
   chatbotInput.value = "";
-  setTimeout(() => addChatMessage(answerCrmQuestion(question), "bot"), 220);
-});
+  chatHistory.push({ role: "user", content: question });
+  const thinking = addChatMessage("Thinking...", "bot");
+
+  try {
+    const payload = await request("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ message: question, history: chatHistory.slice(-8) })
+    });
+    thinking.textContent = payload.reply;
+    chatHistory.push({ role: "assistant", content: payload.reply });
+    if (options.speak) speakReply(payload.reply);
+  } catch (error) {
+    const fallback = answerCrmQuestion(question);
+    thinking.textContent = fallback;
+    if (options.speak) speakReply(fallback);
+  } finally {
+    voiceMode = false;
+  }
+}
 
 function addChatMessage(message, type) {
   const bubble = document.createElement("div");
@@ -783,6 +961,53 @@ function addChatMessage(message, type) {
   bubble.textContent = message;
   chatbotMessages.appendChild(bubble);
   chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+  return bubble;
+}
+
+function startVoiceInput() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast("Voice input is not supported in this browser.");
+    return;
+  }
+
+  if (!recognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.addEventListener("result", async (event) => {
+      const transcript = event.results[0][0].transcript;
+      voiceMode = true;
+      chatbotInput.value = transcript;
+      await sendChatMessage(transcript, { speak: true });
+    });
+
+    recognition.addEventListener("end", () => {
+      voiceButton.classList.remove("listening");
+      voiceButton.textContent = "Voice";
+    });
+
+    recognition.addEventListener("error", () => {
+      voiceButton.classList.remove("listening");
+      voiceButton.textContent = "Voice";
+      showToast("Could not capture voice. Try again.");
+    });
+  }
+
+  voiceButton.classList.add("listening");
+  voiceButton.textContent = "Listen";
+  recognition.start();
+}
+
+function speakReply(text) {
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-IN";
+  utterance.rate = 1;
+  window.speechSynthesis.speak(utterance);
 }
 
 function answerCrmQuestion(question) {
