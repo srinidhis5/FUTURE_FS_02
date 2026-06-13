@@ -665,27 +665,27 @@ label {
 
 .analytics-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1fr) minmax(260px, 0.9fr);
-  gap: 14px;
-  align-items: stretch;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-content: start;
 }
 
 .analytics-panel {
   min-width: 0;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.4);
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .analytics-panel canvas {
   display: block;
   width: 100%;
-  height: 180px;
+  height: 220px;
 }
 
 .reminder-list {
   display: grid;
   gap: 10px;
-  max-height: 180px;
+  max-height: 148px;
   overflow-y: auto;
 }
 
@@ -711,8 +711,9 @@ label {
 
 .insight-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   gap: 16px;
+  align-items: start;
 }
 
 .pipeline-panel,
@@ -1255,11 +1256,7 @@ label {
   }
 
   .analytics-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .reminder-panel {
-    grid-column: span 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .insight-grid,
