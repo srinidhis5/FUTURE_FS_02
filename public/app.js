@@ -77,6 +77,8 @@ const priorityLabels = {
 let toastTimer;
 let filterTimer;
 let loginLiquidFrame;
+let liveRefreshTimer;
+let refreshInFlight = false;
 let recognition;
 let voiceMode = false;
 const chatHistory = [];
@@ -146,6 +148,7 @@ async function checkSession() {
 }
 
 function showLogin() {
+  stopLiveRefresh();
   loginScreen.classList.remove("hidden");
   dashboard.classList.add("hidden");
 }
@@ -155,6 +158,7 @@ function showDashboard() {
   dashboard.classList.remove("hidden");
   profileName.textContent = state.currentUser ? `${state.currentUser} online` : "User online";
   requestNotificationPermission();
+  startLiveRefresh();
 }
 
 function showToast(message) {
@@ -164,32 +168,54 @@ function showToast(message) {
   toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
-async function loadLeads() {
-  state.loading = true;
-  renderLeadList();
+async function loadLeads(options = {}) {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
 
-  const params = new URLSearchParams({
-    status: state.status,
-    search: state.search,
-    source: state.source,
-    priority: state.priority
-  });
-  const [leadPayload, analyticsPayload] = await Promise.all([
-    request(`/api/leads?${params}`),
-    request("/api/analytics")
-  ]);
-
-  state.leads = leadPayload.leads;
-  state.stats = analyticsPayload.stats;
-  state.sources = leadPayload.sources;
-  state.activity = analyticsPayload.recentActivity;
-  state.loading = false;
-
-  if (state.selectedId && !state.leads.some((lead) => lead.id === state.selectedId)) {
-    state.selectedId = "";
+  if (!options.silent) {
+    state.loading = true;
+    renderLeadList();
   }
 
-  render();
+  try {
+    const params = new URLSearchParams({
+      status: state.status,
+      search: state.search,
+      source: state.source,
+      priority: state.priority
+    });
+    const [leadPayload, analyticsPayload] = await Promise.all([
+      request(`/api/leads?${params}`),
+      request("/api/analytics")
+    ]);
+
+    state.leads = leadPayload.leads;
+    state.stats = analyticsPayload.stats;
+    state.sources = leadPayload.sources;
+    state.activity = analyticsPayload.recentActivity;
+    state.loading = false;
+
+    if (state.selectedId && !state.leads.some((lead) => lead.id === state.selectedId)) {
+      state.selectedId = "";
+    }
+
+    render();
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+function startLiveRefresh() {
+  clearInterval(liveRefreshTimer);
+  liveRefreshTimer = setInterval(() => {
+    if (!dashboard.classList.contains("hidden") && document.visibilityState === "visible") {
+      loadLeads({ silent: true }).catch(() => {});
+    }
+  }, 12000);
+}
+
+function stopLiveRefresh() {
+  clearInterval(liveRefreshTimer);
 }
 
 function render() {
@@ -642,6 +668,12 @@ loginForm.addEventListener("submit", async (event) => {
 createAccountButton.addEventListener("click", async () => {
   loginMessage.textContent = "";
   const formData = new FormData(loginForm);
+  const email = String(formData.get("email") || "").trim();
+
+  if (!email) {
+    loginMessage.textContent = "Enter an email address before creating an account.";
+    return;
+  }
 
   try {
     await request("/api/register", {
@@ -655,6 +687,18 @@ createAccountButton.addEventListener("click", async () => {
     await loadLeads();
   } catch (error) {
     loginMessage.textContent = error.message;
+  }
+});
+
+window.addEventListener("focus", () => {
+  if (!dashboard.classList.contains("hidden")) {
+    loadLeads({ silent: true }).catch(() => {});
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !dashboard.classList.contains("hidden")) {
+    loadLeads({ silent: true }).catch(() => {});
   }
 });
 

@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/due-reminders",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

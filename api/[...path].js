@@ -57,7 +57,7 @@ function normalizeUsername(username = "") {
 }
 
 function publicUser(user) {
-  return { id: user._id.toString(), username: user.username };
+  return { id: user._id.toString(), username: user.username, email: user.email || "" };
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -137,6 +137,47 @@ async function createActivity(db, label, userId = null) {
   });
 }
 
+function normalizeEmail(email = "") {
+  return String(email).trim().toLowerCase();
+}
+
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function dateKeyInIndia(date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+async function sendEmail({ to, subject, html }) {
+  if (!process.env.RESEND_API_KEY || !process.env.FROM_EMAIL) {
+    return { skipped: true, reason: "Email provider is not configured." };
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`
+    },
+    body: JSON.stringify({
+      from: process.env.FROM_EMAIL,
+      to,
+      subject,
+      html
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || "Email delivery failed.");
+  return { sent: true, id: payload.id };
+}
+
 async function requireAuth(req, res, next) {
   try {
     const db = await getDb();
@@ -175,21 +216,92 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+app.get("/api/cron/due-reminders", async (req, res) => {
+  try {
+    if (process.env.CRON_SECRET && req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: "Unauthorized." });
+    }
+
+    const db = await getDb();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dueKey = dateKeyInIndia(tomorrow);
+    const leads = await db
+      .collection("leads")
+      .find({ nextFollowUp: dueKey, status: { $ne: "converted" }, ownerId: { $ne: null } })
+      .toArray();
+
+    let sent = 0;
+    let skipped = 0;
+
+    for (const lead of leads) {
+      const user = await db.collection("users").findOne({ _id: lead.ownerId });
+      if (!user?.email) {
+        skipped += 1;
+        continue;
+      }
+
+      const reminderKey = `${lead._id.toString()}:${dueKey}:email`;
+      const existing = await db.collection("reminders").findOne({ _id: reminderKey });
+      if (existing) {
+        skipped += 1;
+        continue;
+      }
+
+      const delivery = await sendEmail({
+        to: user.email,
+        subject: `Lead follow-up due tomorrow: ${lead.name}`,
+        html: `
+          <h2>Lead follow-up due tomorrow</h2>
+          <p><strong>${lead.name}</strong>${lead.company ? ` from ${lead.company}` : ""} is due on ${dueKey}.</p>
+          <p>Status: ${lead.status}<br />Priority: ${lead.priority}<br />Source: ${lead.source}</p>
+          <p>${lead.message}</p>
+        `
+      });
+
+      await db.collection("reminders").insertOne({
+        _id: reminderKey,
+        leadId: lead._id,
+        userId: user._id,
+        email: user.email,
+        dueDate: dueKey,
+        delivery,
+        createdAt: new Date().toISOString()
+      });
+      if (delivery.sent) sent += 1;
+      else skipped += 1;
+    }
+
+    res.json({ ok: true, dueDate: dueKey, checked: leads.length, sent, skipped });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/register", async (req, res) => {
   try {
     const db = await getDb();
     const username = normalizeUsername(req.body.username);
+    const email = normalizeEmail(req.body.email);
     const password = String(req.body.password || "");
 
     if (username.length < 3 || password.length < 6) {
       return res.status(400).json({ error: "Use a username of 3+ characters and password of 6+ characters." });
     }
 
+    if (!isEmail(email)) {
+      return res.status(400).json({ error: "Enter a valid email address for reminders." });
+    }
+
     const existing = await db.collection("users").findOne({ username });
     if (existing) return res.status(409).json({ error: "Username already exists." });
 
+    const existingEmail = await db.collection("users").findOne({ email });
+    if (existingEmail) return res.status(409).json({ error: "Email is already registered." });
+
     const userResult = await db.collection("users").insertOne({
       username,
+      email,
       passwordHash: hashPassword(password),
       createdAt: new Date().toISOString()
     });
@@ -203,7 +315,7 @@ app.post("/api/register", async (req, res) => {
     });
 
     setSessionCookie(res, sessionId);
-    res.status(201).json({ user: { id: userResult.insertedId.toString(), username } });
+    res.status(201).json({ user: { id: userResult.insertedId.toString(), username, email } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
