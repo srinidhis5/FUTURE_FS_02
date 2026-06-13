@@ -103,6 +103,30 @@
 
           <section class="metrics" id="metrics"></section>
 
+          <section class="analytics-grid" aria-label="Lead analytics">
+            <article class="analytics-panel">
+              <div class="section-heading">
+                <h3>Status Mix</h3>
+                <span id="statusChartSummary">Live</span>
+              </div>
+              <canvas id="statusChart" width="280" height="180" aria-label="Lead status pie chart"></canvas>
+            </article>
+            <article class="analytics-panel">
+              <div class="section-heading">
+                <h3>Priority Load</h3>
+                <span id="priorityChartSummary">Live</span>
+              </div>
+              <canvas id="priorityChart" width="420" height="180" aria-label="Lead priority bar chart"></canvas>
+            </article>
+            <article class="analytics-panel reminder-panel">
+              <div class="section-heading">
+                <h3>Follow-up Reminders</h3>
+                <span id="reminderSummary">Due soon</span>
+              </div>
+              <div id="reminderList" class="reminder-list"></div>
+            </article>
+          </section>
+
           <section class="insight-grid">
             <article class="pipeline-panel lead-insight-panel">
               <div class="section-heading">
@@ -118,29 +142,6 @@
               </div>
               <div class="activity-feed" id="activityFeed"></div>
             </article>
-            <section class="analytics-grid" aria-label="Lead analytics">
-              <article class="analytics-panel">
-                <div class="section-heading">
-                  <h3>Status Mix</h3>
-                  <span id="statusChartSummary">Live</span>
-                </div>
-                <canvas id="statusChart" width="360" height="220" aria-label="Lead status pie chart"></canvas>
-              </article>
-              <article class="analytics-panel">
-                <div class="section-heading">
-                  <h3>Priority Load</h3>
-                  <span id="priorityChartSummary">Live</span>
-                </div>
-                <canvas id="priorityChart" width="360" height="220" aria-label="Lead priority bar chart"></canvas>
-              </article>
-              <article class="analytics-panel reminder-panel">
-                <div class="section-heading">
-                  <h3>Follow-up Reminders</h3>
-                  <span id="reminderSummary">Due soon</span>
-                </div>
-                <div id="reminderList" class="reminder-list"></div>
-              </article>
-            </section>
           </section>
 
           <section class="content-grid" id="contentGrid">

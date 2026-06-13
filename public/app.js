@@ -278,32 +278,20 @@ function chartColor(index) {
   return ["#00f5ff", "#ffe600", "#00ff85", "#bc13fe", "#ff2d75"][index % 5];
 }
 
-function prepareCanvas(canvas) {
-  const rect = canvas.getBoundingClientRect();
-  const scale = window.devicePixelRatio || 1;
-  const width = Math.max(260, Math.round(rect.width || canvas.width));
-  const height = Math.max(180, Math.round(rect.height || canvas.height));
-  canvas.width = Math.round(width * scale);
-  canvas.height = Math.round(height * scale);
-  const context = canvas.getContext("2d");
-  context.setTransform(scale, 0, 0, scale, 0, 0);
-  context.clearRect(0, 0, width, height);
-  return { context, width, height };
-}
-
 function drawPieChart(canvas, items) {
   if (!canvas) return;
-  const { context, width, height } = prepareCanvas(canvas);
+  const context = canvas.getContext("2d");
+  const { width, height } = canvas;
+  context.clearRect(0, 0, width, height);
   const total = items.reduce((sum, item) => sum + item.value, 0);
-  const centerX = Math.min(96, width * 0.28);
-  const centerY = 84;
+  const centerX = 82;
+  const centerY = height / 2;
   const radius = 58;
-  const innerRadius = 34;
 
   if (!total) {
     context.fillStyle = "#8b98aa";
     context.font = "800 14px Inter, sans-serif";
-    context.fillText("No lead data yet", 24, 86);
+    context.fillText("No lead data yet", 34, centerY);
     return;
   }
 
@@ -311,62 +299,43 @@ function drawPieChart(canvas, items) {
   items.forEach((item, index) => {
     const slice = (item.value / total) * Math.PI * 2;
     context.beginPath();
+    context.moveTo(centerX, centerY);
     context.arc(centerX, centerY, radius, start, start + slice);
-    context.arc(centerX, centerY, innerRadius, start + slice, start, true);
+    context.closePath();
     context.fillStyle = chartColor(index);
     context.fill();
     start += slice;
   });
 
-  context.fillStyle = "rgba(0, 0, 0, 0.64)";
-  context.beginPath();
-  context.arc(centerX, centerY, innerRadius - 2, 0, Math.PI * 2);
-  context.fill();
-  context.fillStyle = "#f8fbff";
-  context.textAlign = "center";
-  context.font = "900 22px Inter, sans-serif";
-  context.fillText(String(total), centerX, centerY - 2);
-  context.fillStyle = "#8b98aa";
-  context.font = "800 10px Inter, sans-serif";
-  context.fillText("LEADS", centerX, centerY + 16);
-  context.textAlign = "left";
-
   items.forEach((item, index) => {
-    const percent = Math.round((item.value / total) * 100);
-    const y = 44 + index * 36;
-    const x = Math.min(184, width * 0.52);
+    const y = 48 + index * 30;
     context.fillStyle = chartColor(index);
-    context.fillRect(x, y - 11, 11, 11);
+    context.fillRect(170, y - 10, 12, 12);
     context.fillStyle = "#f8fbff";
-    context.font = "900 12px Inter, sans-serif";
-    context.fillText(item.label, x + 18, y - 2);
-    context.fillStyle = "#8b98aa";
-    context.font = "800 11px Inter, sans-serif";
-    context.fillText(`${item.value} leads - ${percent}%`, x + 18, y + 14);
+    context.font = "800 12px Inter, sans-serif";
+    context.fillText(`${item.label}: ${item.value}`, 190, y);
   });
 }
 
 function drawBarChart(canvas, items) {
   if (!canvas) return;
-  const { context, width } = prepareCanvas(canvas);
+  const context = canvas.getContext("2d");
+  const { width, height } = canvas;
+  context.clearRect(0, 0, width, height);
   const max = Math.max(1, ...items.map((item) => item.value));
-  const labelX = 16;
-  const barX = 92;
-  const barWidthMax = width - barX - 42;
 
   items.forEach((item, index) => {
-    const y = 42 + index * 52;
-    const barWidth = Math.round((item.value / max) * barWidthMax);
-    context.fillStyle = "#f8fbff";
-    context.font = "900 12px Inter, sans-serif";
-    context.fillText(item.label, labelX, y + 5);
+    const y = 30 + index * 46;
+    const barWidth = Math.round((item.value / max) * (width - 150));
+    context.fillStyle = "#8b98aa";
+    context.font = "800 12px Inter, sans-serif";
+    context.fillText(item.label, 14, y + 10);
     context.fillStyle = "rgba(255, 255, 255, 0.08)";
-    context.fillRect(barX, y - 12, barWidthMax, 22);
+    context.fillRect(104, y - 8, width - 130, 18);
     context.fillStyle = chartColor(index);
-    context.fillRect(barX, y - 12, barWidth, 22);
+    context.fillRect(104, y - 8, barWidth, 18);
     context.fillStyle = "#f8fbff";
-    context.font = "900 12px Inter, sans-serif";
-    context.fillText(String(item.value), Math.min(barX + barWidth + 10, width - 22), y + 5);
+    context.fillText(String(item.value), 112 + barWidth, y + 7);
   });
 }
 
@@ -724,12 +693,6 @@ createAccountButton.addEventListener("click", async () => {
 window.addEventListener("focus", () => {
   if (!dashboard.classList.contains("hidden")) {
     loadLeads({ silent: true }).catch(() => {});
-  }
-});
-
-window.addEventListener("resize", () => {
-  if (!dashboard.classList.contains("hidden")) {
-    renderCharts();
   }
 });
 
