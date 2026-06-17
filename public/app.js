@@ -1083,15 +1083,28 @@ function leadLine(lead) {
 
 function answerCrmQuestion(question) {
   const text = question.toLowerCase();
+  const asksWhoToContact = text.includes("contact") || text.includes("follow") || text.includes("reach");
+  const asksTiming = text.includes("now") || text.includes("today") || text.includes("due");
+  const asksBest = text.includes("better") || text.includes("best") || text.includes("first") || text.includes("priority");
   if (text.includes("how many") && text.includes("lead")) {
     const due = dueLeads();
     const urgent = due.slice(0, 3).map(leadLine);
     return `You have ${state.stats.total || state.leads.length} leads. ${due.length ? `${due.length} need contact now: ${urgent.join("; ")}.` : "No leads are due for contact right now."}`;
   }
-  if ((text.includes("contact") || text.includes("follow")) && (text.includes("right now") || text.includes("today") || text.includes("due"))) {
+  if (asksWhoToContact && (asksTiming || asksBest)) {
     const due = dueLeads();
-    if (!due.length) return "No leads are due for contact right now. Check the reminder panel for upcoming follow-ups.";
-    return `Contact these first: ${due.slice(0, 5).map(leadLine).join("; ")}.`;
+    const openLeads = state.leads
+      .filter((lead) => lead.status !== "converted")
+      .sort((a, b) => {
+        const priorityRank = { high: 0, medium: 1, low: 2 };
+        const priorityDelta = priorityRank[a.priority] - priorityRank[b.priority];
+        if (priorityDelta) return priorityDelta;
+        return new Date(a.nextFollowUp || "9999-12-31") - new Date(b.nextFollowUp || "9999-12-31");
+      });
+    const picks = due.length ? due : openLeads;
+    if (!picks.length) return "You do not have any open leads to contact right now.";
+    const reason = due.length ? "They are due now" : "They are the strongest open priorities";
+    return `Contact these first: ${picks.slice(0, 5).map(leadLine).join("; ")}. ${reason}.`;
   }
   if (text.includes("high") && text.includes("priority")) {
     const highPriority = state.leads.filter((lead) => lead.priority === "high" && lead.status !== "converted");
