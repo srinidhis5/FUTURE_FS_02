@@ -1069,8 +1069,35 @@ function speakReply(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+function dueLeads() {
+  const now = new Date();
+  now.setHours(23, 59, 59, 999);
+  return state.leads
+    .filter((lead) => lead.nextFollowUp && lead.status !== "converted" && new Date(lead.nextFollowUp) <= now)
+    .sort((a, b) => new Date(a.nextFollowUp) - new Date(b.nextFollowUp));
+}
+
+function leadLine(lead) {
+  return `${lead.name}${lead.company ? ` from ${lead.company}` : ""} (${priorityLabels[lead.priority]}, ${statusLabels[lead.status]}, due ${formatDateOnly(lead.nextFollowUp)})`;
+}
+
 function answerCrmQuestion(question) {
   const text = question.toLowerCase();
+  if (text.includes("how many") && text.includes("lead")) {
+    const due = dueLeads();
+    const urgent = due.slice(0, 3).map(leadLine);
+    return `You have ${state.stats.total || state.leads.length} leads. ${due.length ? `${due.length} need contact now: ${urgent.join("; ")}.` : "No leads are due for contact right now."}`;
+  }
+  if ((text.includes("contact") || text.includes("follow")) && (text.includes("right now") || text.includes("today") || text.includes("due"))) {
+    const due = dueLeads();
+    if (!due.length) return "No leads are due for contact right now. Check the reminder panel for upcoming follow-ups.";
+    return `Contact these first: ${due.slice(0, 5).map(leadLine).join("; ")}.`;
+  }
+  if (text.includes("high") && text.includes("priority")) {
+    const highPriority = state.leads.filter((lead) => lead.priority === "high" && lead.status !== "converted");
+    if (!highPriority.length) return "You do not have any open high-priority leads right now.";
+    return `Open high-priority leads: ${highPriority.slice(0, 5).map(leadLine).join("; ")}.`;
+  }
   if (text.includes("lead") && (text.includes("add") || text.includes("create"))) {
     return "Use the Add Lead button on the left, then fill name, email, source, priority, follow-up date, and message. The lead will appear in the dashboard immediately.";
   }
