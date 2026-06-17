@@ -94,17 +94,6 @@ function serializeLead(lead) {
   };
 }
 
-function leadContext(leads) {
-  if (!leads.length) return "No leads are currently saved for this account.";
-  return leads
-    .slice(0, 20)
-    .map((lead) => {
-      const next = lead.nextFollowUp || "not scheduled";
-      return `${lead.name} (${lead.company || "no company"}) is ${lead.status}, ${lead.priority} priority, source ${lead.source}, next follow-up ${next}. Need: ${lead.message}`;
-    })
-    .join("\n");
-}
-
 function validateLead(payload) {
   const name = String(payload.name || "").trim();
   const email = String(payload.email || "").trim().toLowerCase();
@@ -356,51 +345,6 @@ app.post("/api/logout", requireAuth, async (req, res) => {
 
 app.get("/api/me", requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
-});
-
-app.post("/api/chat", requireAuth, async (req, res) => {
-  try {
-    const message = String(req.body.message || "").trim();
-    if (!message) return res.status(400).json({ error: "Message is required." });
-
-    const leads = await req.db.collection("leads").find({ ownerId: req.user._id }).sort({ updatedAt: -1 }).limit(20).toArray();
-    const context = leadContext(leads);
-
-    if (!process.env.OPENAI_API_KEY) {
-      return res.json({
-        reply:
-          "I can answer with your CRM context once OPENAI_API_KEY is added in Vercel. For now: ask me about due leads, lead status, priority, notes, or follow-ups, and I will use the dashboard data already visible to you."
-      });
-    }
-
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-        instructions:
-          "You are leadIT Assistant inside a CRM. Be concise, practical, and helpful. Use only the signed-in user's CRM context below. Do not invent private records. If asked to perform an action, explain the exact next UI step unless the API action is available.",
-        input: `Current user: ${req.user.username}\nCRM context:\n${context}\n\nUser question: ${message}`
-      })
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      return res.status(502).json({ error: payload.error?.message || "AI service failed." });
-    }
-
-    const reply =
-      payload.output_text ||
-      payload.output?.flatMap((item) => item.content || []).find((content) => content.type === "output_text")?.text ||
-      "I could not generate a response right now.";
-
-    res.json({ reply });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 app.get("/api/leads", requireAuth, async (req, res) => {

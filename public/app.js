@@ -43,13 +43,6 @@ const addLeadButton = document.querySelector("#addLeadButton");
 const recentActivityButton = document.querySelector("#recentActivityButton");
 const profileButton = document.querySelector("#profileButton");
 const settingsButton = document.querySelector("#settingsButton");
-const chatbotToggle = document.querySelector("#chatbotToggle");
-const chatbotPanel = document.querySelector("#chatbotPanel");
-const chatbotClose = document.querySelector("#chatbotClose");
-const chatbotMessages = document.querySelector("#chatbotMessages");
-const chatbotForm = document.querySelector("#chatbotForm");
-const chatbotInput = document.querySelector("#chatbotInput");
-const voiceButton = document.querySelector("#voiceButton");
 const statusChart = document.querySelector("#statusChart");
 const priorityChart = document.querySelector("#priorityChart");
 const statusChartSummary = document.querySelector("#statusChartSummary");
@@ -80,9 +73,6 @@ let filterTimer;
 let loginLiquidFrame;
 let liveRefreshTimer;
 let refreshInFlight = false;
-let recognition;
-let voiceMode = false;
-const chatHistory = [];
 
 function initLoginLiquidBackground() {
   if (!loginScreen) return;
@@ -982,169 +972,6 @@ function openAccountModal(type) {
 function closeAccountModal() {
   accountModal.classList.add("hidden");
   accountModal.setAttribute("aria-hidden", "true");
-}
-
-chatbotToggle.addEventListener("click", () => {
-  chatbotPanel.classList.toggle("hidden");
-  chatbotInput.focus();
-});
-
-chatbotClose.addEventListener("click", () => {
-  chatbotPanel.classList.add("hidden");
-});
-
-chatbotForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const question = chatbotInput.value.trim();
-  if (!question) return;
-  await sendChatMessage(question, { speak: voiceMode });
-});
-
-if (voiceButton) {
-  voiceButton.addEventListener("click", () => {
-    startVoiceInput();
-  });
-}
-
-async function sendChatMessage(question, options = {}) {
-  addChatMessage(question, "user");
-  chatbotInput.value = "";
-  chatHistory.push({ role: "user", content: question });
-  const thinking = addChatMessage("Thinking...", "bot");
-
-  try {
-    const payload = await request("/api/chat", {
-      method: "POST",
-      body: JSON.stringify({ message: question, history: chatHistory.slice(-8) })
-    });
-    thinking.textContent = payload.reply;
-    chatHistory.push({ role: "assistant", content: payload.reply });
-    if (options.speak) speakReply(payload.reply);
-  } catch (error) {
-    const fallback = answerCrmQuestion(question);
-    thinking.textContent = fallback;
-    if (options.speak) speakReply(fallback);
-  } finally {
-    voiceMode = false;
-  }
-}
-
-function addChatMessage(message, type) {
-  const bubble = document.createElement("div");
-  bubble.className = `chat-message ${type}`;
-  bubble.textContent = message;
-  chatbotMessages.appendChild(bubble);
-  chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
-  return bubble;
-}
-
-function startVoiceInput() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    showToast("Voice input is not supported in this browser.");
-    return;
-  }
-
-  if (!recognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = "en-IN";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.addEventListener("result", async (event) => {
-      const transcript = event.results[0][0].transcript;
-      voiceMode = true;
-      chatbotInput.value = transcript;
-      await sendChatMessage(transcript, { speak: true });
-    });
-
-    recognition.addEventListener("end", () => {
-      voiceButton.classList.remove("listening");
-      voiceButton.textContent = "Voice";
-    });
-
-    recognition.addEventListener("error", () => {
-      voiceButton.classList.remove("listening");
-      voiceButton.textContent = "Voice";
-      showToast("Could not capture voice. Try again.");
-    });
-  }
-
-  voiceButton.classList.add("listening");
-  voiceButton.textContent = "Listen";
-  recognition.start();
-}
-
-function speakReply(text) {
-  if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "en-IN";
-  utterance.rate = 1;
-  window.speechSynthesis.speak(utterance);
-}
-
-function dueLeads() {
-  const now = new Date();
-  now.setHours(23, 59, 59, 999);
-  return state.leads
-    .filter((lead) => lead.nextFollowUp && lead.status !== "converted" && new Date(lead.nextFollowUp) <= now)
-    .sort((a, b) => new Date(a.nextFollowUp) - new Date(b.nextFollowUp));
-}
-
-function leadLine(lead) {
-  return `${lead.name}${lead.company ? ` from ${lead.company}` : ""} (${priorityLabels[lead.priority]}, ${statusLabels[lead.status]}, due ${formatDateOnly(lead.nextFollowUp)})`;
-}
-
-function answerCrmQuestion(question) {
-  const text = question.toLowerCase();
-  const asksWhoToContact = text.includes("contact") || text.includes("follow") || text.includes("reach");
-  const asksTiming = text.includes("now") || text.includes("today") || text.includes("due");
-  const asksBest = text.includes("better") || text.includes("best") || text.includes("first") || text.includes("priority");
-  if (text.includes("how many") && text.includes("lead")) {
-    const due = dueLeads();
-    const urgent = due.slice(0, 3).map(leadLine);
-    return `You have ${state.stats.total || state.leads.length} leads. ${due.length ? `${due.length} need contact now: ${urgent.join("; ")}.` : "No leads are due for contact right now."}`;
-  }
-  if (asksWhoToContact && (asksTiming || asksBest)) {
-    const due = dueLeads();
-    const openLeads = state.leads
-      .filter((lead) => lead.status !== "converted")
-      .sort((a, b) => {
-        const priorityRank = { high: 0, medium: 1, low: 2 };
-        const priorityDelta = priorityRank[a.priority] - priorityRank[b.priority];
-        if (priorityDelta) return priorityDelta;
-        return new Date(a.nextFollowUp || "9999-12-31") - new Date(b.nextFollowUp || "9999-12-31");
-      });
-    const picks = due.length ? due : openLeads;
-    if (!picks.length) return "You do not have any open leads to contact right now.";
-    const reason = due.length ? "They are due now" : "They are the strongest open priorities";
-    return `Contact these first: ${picks.slice(0, 5).map(leadLine).join("; ")}. ${reason}.`;
-  }
-  if (text.includes("high") && text.includes("priority")) {
-    const highPriority = state.leads.filter((lead) => lead.priority === "high" && lead.status !== "converted");
-    if (!highPriority.length) return "You do not have any open high-priority leads right now.";
-    return `Open high-priority leads: ${highPriority.slice(0, 5).map(leadLine).join("; ")}.`;
-  }
-  if (text.includes("lead") && (text.includes("add") || text.includes("create"))) {
-    return "Use the Add Lead button on the left, then fill name, email, source, priority, follow-up date, and message. The lead will appear in the dashboard immediately.";
-  }
-  if (text.includes("status") || text.includes("new") || text.includes("contacted") || text.includes("converted")) {
-    return "Open a lead from the list, then change its status to New, Contacted, or Converted in the lead detail panel.";
-  }
-  if (text.includes("note") || text.includes("follow")) {
-    return "Select a lead and use the Follow-up note box. Notes help track calls, proposals, reminders, and next steps.";
-  }
-  if (text.includes("search") || text.includes("filter")) {
-    return "Use the search bar at the top to find leads by name, email, company, source, phone, or message. The metric cards also filter leads by status, due date, and priority.";
-  }
-  if (text.includes("login") || text.includes("account") || text.includes("password")) {
-    return "Create an account from the login page, then sign in with that username and password. Passwords are stored as salted hashes in the local database.";
-  }
-  if (text.includes("why") || text.includes("use")) {
-    return "This CRM is used to manage client enquiries, track follow-ups, prioritize serious leads, and convert interested people into clients.";
-  }
-  return "I can help with this CRM's leads, statuses, notes, follow-ups, search, filters, login, and dashboard. Ask me about any feature you see here.";
 }
 
 initLoginLiquidBackground();
