@@ -56,6 +56,7 @@ const statusChartSummary = document.querySelector("#statusChartSummary");
 const priorityChartSummary = document.querySelector("#priorityChartSummary");
 const reminderList = document.querySelector("#reminderList");
 const reminderSummary = document.querySelector("#reminderSummary");
+const clearRemindersButton = document.querySelector("#clearRemindersButton");
 const accountModal = document.querySelector("#accountModal");
 const accountModalEyebrow = document.querySelector("#accountModalEyebrow");
 const accountModalTitle = document.querySelector("#accountModalTitle");
@@ -359,11 +360,20 @@ function isDueTomorrow(lead) {
 function reminderLeads() {
   return state.leads
     .filter((lead) => lead.nextFollowUp && lead.status !== "converted")
+    .filter((lead) => !localStorage.getItem(`leadit-dismissed-reminder-${lead.id}-${lead.nextFollowUp}`))
     .sort((a, b) => {
       const tomorrowDelta = Number(isDueTomorrow(b)) - Number(isDueTomorrow(a));
       if (tomorrowDelta) return tomorrowDelta;
       return new Date(a.nextFollowUp) - new Date(b.nextFollowUp);
     });
+}
+
+function clearVisibleReminders() {
+  reminderLeads().forEach((lead) => {
+    localStorage.setItem(`leadit-dismissed-reminder-${lead.id}-${lead.nextFollowUp}`, "true");
+  });
+  renderReminders();
+  showToast("Reminders cleared from this browser.");
 }
 
 function renderCharts() {
@@ -389,6 +399,7 @@ function renderReminders() {
   const dueTomorrowCount = reminders.filter(isDueTomorrow).length;
   if (!reminderList || !reminderSummary) return;
   reminderSummary.textContent = dueTomorrowCount ? `${dueTomorrowCount} due tomorrow` : "Clear";
+  if (clearRemindersButton) clearRemindersButton.disabled = !reminders.length;
 
   if (!reminders.length) {
     reminderList.innerHTML = `<p class="muted">No scheduled follow-ups.</p>`;
@@ -716,6 +727,10 @@ document.addEventListener("visibilitychange", () => {
     loadLeads({ silent: true }).catch(() => {});
   }
 });
+
+if (clearRemindersButton) {
+  clearRemindersButton.addEventListener("click", clearVisibleReminders);
+}
 
 logoutButton.addEventListener("click", async () => {
   await request("/api/logout", { method: "POST" });

@@ -689,6 +689,18 @@ label {
   overflow-y: auto;
 }
 
+.clear-reminders {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 0.74rem;
+}
+
+.clear-reminders:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
 .reminder-item {
   display: grid;
   gap: 4px;
